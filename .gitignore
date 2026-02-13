@@ -53,3 +53,9 @@ dkms.conf
 
 # debug information files
 *.dwo
+
+# layout
+layout.txt
+
+# build system
+build/
