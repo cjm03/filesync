@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -35,41 +36,6 @@ static int create_listen_socket(int port) {
     return fd;
 }
 
-static int manifest_read_text(const char *text, manifest_t *m) {
-    // Reuse your existing manifest parser if you have one.
-    // This is a placeholder simple parser (TYPE\tSIZE\tMTIME\tPATH).
-    const char *p = text;
-    while (*p) {
-        char type_str[32];
-        size_t size = 0;
-        long long mtime_ll = 0;
-        char path_buf[4096];
-
-        int n = sscanf(p, "%31s\t%zu\t%lld\t%4095[^\n]", type_str, &size, &mtime_ll, path_buf);
-        if (n != 4) break;
-
-        manifest_entry_t e = {0};
-        e.size = size;
-        e.mtime = (time_t)mtime_ll;
-        e.path = strdup(path_buf);
-
-        if (strcmp(type_str, "FILE") == 0) e.type = ENTRY_FILE;
-        else if (strcmp(type_str, "DIR") == 0) e.type = ENTRY_DIR;
-        else if (strcmp(type_str, "SYMLINK") == 0) e.type = ENTRY_SYMLINK;
-        else e.type = ENTRY_OTHER;
-
-        if (ManifestAdd(m, &e) != 0) {
-            free(e.path);
-            return -1;
-        }
-
-        // advance to next line
-        const char *nl = strchr(p, '\n');
-        if (!nl) break;
-        p = nl + 1;
-    }
-    return 0;
-}
 
 
 
@@ -112,7 +78,7 @@ int RunServer(const char* root, int port) {
 
     manifest_t remote;
     ManifestInit(&remote);
-    if (payload && manifest_read_text((const char *)payload, &remote) != 0) {
+    if (payload && ManifestReadFromText((const char *)payload, &remote) != 0) {
         FrameSend(client_fd, MSG_ERR, "Manifest parse error", 21);
         free(payload);
         ManifestFree(&remote);
@@ -147,38 +113,31 @@ int RunServer(const char* root, int port) {
         return -1;
     }
 
-    // Write diff to memory
-    // (Simple: write to tmp buffer using a growing string)
-    size_t buf_cap = 1024;
-    size_t buf_len = 0;
-    char *diff_buf = malloc(buf_cap);
-    if (!diff_buf) {
-        FrameSend(client_fd, MSG_ERR, "Alloc failed", 12);
-    } else {
-        for (size_t i = 0; i < d.count; i++) {
-            const char *action =
-                (d.items[i].action == ACTION_NEW) ? "NEW" :
-                (d.items[i].action == ACTION_CHANGED) ? "CHANGED" : "DELETED";
-
-            const char *path = d.items[i].entry->path;
-            size_t line_len = strlen(action) + 1 + strlen(path) + 1;
-
-            if (buf_len + line_len + 1 > buf_cap) {
-                buf_cap *= 2;
-                char *tmp = realloc(diff_buf, buf_cap);
-                if (!tmp) { free(diff_buf); diff_buf = NULL; break; }
-                diff_buf = tmp;
+    char* diff_text = NULL;
+    size_t diff_len = 0;
+    if (DiffWrite(&d, "/tmp/sync_diff.txt") == 0) {
+        FILE* f = fopen("/tmp/sync_diff.txt", "r");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long sz = ftell(f);
+            fseek(f, 0, SEEK_SET);
+            diff_text = malloc(sz + 1);
+            if (diff_text) {
+                fread(diff_text, 1, sz, f);
+                diff_text[sz] = '\0';
+                diff_len = (size_t)sz;
             }
-
-            if (diff_buf) {
-                buf_len += (size_t)snprintf(diff_buf + buf_len, buf_cap - buf_len, "%s\t%s\n", action, path);
-            }
-        }
-        if (diff_buf) {
-            FrameSend(client_fd, MSG_DIFF, diff_buf, (uint32_t)buf_len);
-            free(diff_buf);
+            fclose(f);
         }
     }
+
+    if (diff_text) {
+        FrameSend(client_fd, MSG_DIFF, diff_text, (uint32_t)diff_len);
+        free(diff_text);
+    } else {
+        FrameSend(client_fd, MSG_ERR, "Diff serialize failed", 22);
+    }
+
 
     DiffFree(&d);
     ManifestFree(&local);

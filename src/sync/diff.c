@@ -1,6 +1,7 @@
 // diff.c
 #include "../common/log.h"
 #include "../fs/manifest.h"
+#include "../common/sha256.h"
 #include "diff.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -41,14 +42,18 @@ static void manifest_sort(manifest_t* m) {
     qsort(m->entries, m->count, sizeof(manifest_entry_t), entry_compare);
 }
 
+static int hashes_differ(const manifest_entry_t* a, const manifest_entry_t* b) {
+    if (!a->has_hash || !b->has_hash) return 0;
+    return memcmp(a->hash, b->hash, SHA256_DIGEST_SIZE) != 0;
+}
+
 static int entries_differ(const manifest_entry_t* local, const manifest_entry_t* remote) {
     if (local->type != remote->type) return 1;
     if (local->size != remote->size) return 1;
     if (local->mtime != remote->mtime) return 1;
-    if (local->has_hash != remote->has_hash) return 1;
-    if (local->has_hash == remote->has_hash) {
-        if (local->hash != remote->hash) return 1;
-    }
+
+    if (hashes_differ(local, remote)) return 1;
+
     return 0;
 }
 

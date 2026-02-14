@@ -16,39 +16,6 @@ static void usage(void) {
     printf("   sync --sync --root <path> --host <ip> --port 8443\n");
 }
 
-static int ManifestRead(const char* path, manifest_t* m) {
-    FILE* f = fopen(path, "r");
-    if (!f) return -1;
-
-    char line[8192];
-    while (fgets(line, sizeof(line), f)) {
-        manifest_entry_t e = {0};
-        char type_string[32];
-        long long mtime_ll;
-        char path_buf[4096];
-
-        if (sscanf(line, "%31s\t%zu\t%lld\t%4095[^\n]", type_string, &e.size, &mtime_ll, path_buf) != 4) {
-            fclose(f);
-            return -1;
-        }
-
-        e.mtime = (time_t)mtime_ll;
-        e.path = strdup(path_buf);
-
-        if (strcmp(type_string, "FILE") == 0) e.type = ENTRY_FILE;
-        else if (strcmp(type_string, "DIR") == 0) e.type = ENTRY_DIR;
-        else if (strcmp(type_string, "SYMLINK") == 0) e.type = ENTRY_SYMLINK;
-        else e.type = ENTRY_OTHER;
-
-        if (ManifestAdd(m, &e) != 0) {
-            free(e.path);
-            fclose(f);
-            return -1;
-        }
-    }
-    fclose(f);
-    return 0;
-}
 
 int main(int argc, char* argv[]) {
     if (argc < 5) {

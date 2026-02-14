@@ -30,6 +30,11 @@ typedef struct {
 void ManifestInit(manifest_t* m);
 void ManifestFree(manifest_t* m);
 int ManifestAdd(manifest_t* m, const manifest_entry_t* e);
+
 int ManifestWrite(const manifest_t* m, const char* out_path);
+int ManifestRead(const char* path, manifest_t* m);
+
+int ManifestWriteToText(const manifest_t* m, char** out_text, size_t* out_len);
+int ManifestReadFromText(const char* text, manifest_t* m);
 
 #endif // MANIFEST_H

@@ -27,35 +27,6 @@ static int connect_to_host(const char *host, int port) {
     return fd;
 }
 
-static char *manifest_to_text(const manifest_t *m, size_t *out_len) {
-    size_t buf_cap = 1024;
-    size_t buf_len = 0;
-    char *buf = malloc(buf_cap);
-    if (!buf) return NULL;
-
-    for (size_t i = 0; i < m->count; i++) {
-        const manifest_entry_t *e = &m->entries[i];
-        const char *type =
-            (e->type == ENTRY_FILE) ? "FILE" :
-            (e->type == ENTRY_DIR) ? "DIR" :
-            (e->type == ENTRY_SYMLINK) ? "SYMLINK" : "OTHER";
-
-        size_t line_len = strlen(type) + 1 + 32 + 1 + 32 + 1 + strlen(e->path) + 1;
-        if (buf_len + line_len + 1 > buf_cap) {
-            buf_cap *= 2;
-            char *tmp = realloc(buf, buf_cap);
-            if (!tmp) { free(buf); return NULL; }
-            buf = tmp;
-        }
-
-        buf_len += (size_t)snprintf(buf + buf_len, buf_cap - buf_len,
-            "%s\t%zu\t%lld\t%s\n", type, e->size, (long long)e->mtime, e->path);
-    }
-
-    *out_len = buf_len;
-    return buf;
-}
-
 int RunClient(const char *root, const char *host, int port) {
     manifest_t local;
     ManifestInit(&local);
@@ -66,9 +37,10 @@ int RunClient(const char *root, const char *host, int port) {
         return -1;
     }
 
+    char* manifest_text = NULL;
     size_t manifest_len = 0;
-    char *manifest_text = manifest_to_text(&local, &manifest_len);
-    if (!manifest_text) {
+    if (ManifestWriteToText(&local, &manifest_text, &manifest_len) != 0) {
+        LogError("Client: manifest serialize failed");
         ManifestFree(&local);
         return -1;
     }

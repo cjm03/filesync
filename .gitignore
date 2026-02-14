@@ -60,5 +60,6 @@ layout.txt
 # build system
 build/
 
-# test binaries
+# binaries
 test_*
+sync
