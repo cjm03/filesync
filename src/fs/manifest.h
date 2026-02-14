@@ -2,6 +2,7 @@
 #define MANIFEST_H
 
 #include <stddef.h>
+#include <stdbool.h>
 #include <time.h>
 
 typedef enum {
@@ -16,6 +17,8 @@ typedef struct {
     entry_type_t type;
     size_t size;
     time_t mtime;
+    unsigned char hash[32];
+    bool has_hash;
 } manifest_entry_t;
 
 typedef struct {
@@ -27,6 +30,6 @@ typedef struct {
 void ManifestInit(manifest_t* m);
 void ManifestFree(manifest_t* m);
 int ManifestAdd(manifest_t* m, const manifest_entry_t* e);
-int ManifestWrite(manifest_t* m, const char* out_path);
+int ManifestWrite(const manifest_t* m, const char* out_path);
 
 #endif // MANIFEST_H

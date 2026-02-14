@@ -37,12 +37,14 @@ static const char* type_to_string(entry_type_t t) {
     }
 }
 
-int ManifestWrite(manifest_t* m, const char* out_path) {
+int ManifestWrite(const manifest_t* m, const char* out_path) {
     FILE* f = fopen(out_path, "w");
     if (!f) return -1;
     for (size_t i = 0; i < m->count; i++) {
         const manifest_entry_t* e = &m->entries[i];
         fprintf(f, "%s\t%zu\t%lld\t%s\n", type_to_string(e->type), e->size, (long long)e->mtime, e->path);
+        // fprintf(f, "%s,%d\t%zu\t%lld\t%s\t%s\n", type_to_string(e->type), e->has_hash, e->size, (long long)e->mtime, e->path, e->hash);
+        // printf("%s,%d\t%zu\t%lld\t%s\t%s\n", type_to_string(e->type), e->has_hash, e->size, (long long)e->mtime, e->path, e->hash);
     }
     fclose(f);
     return 0;

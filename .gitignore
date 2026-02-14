@@ -59,3 +59,6 @@ layout.txt
 
 # build system
 build/
+
+# test binaries
+test_*
