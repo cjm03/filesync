@@ -4,7 +4,7 @@
 #include "../fs/manifest.h"
 #include "../sync/diff.h"
 #include "../common/log.h"
-#include <asm-generic/socket.h>
+// #include <asm-generic/socket.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>

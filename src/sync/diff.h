@@ -11,7 +11,7 @@ typedef enum {
 
 typedef struct {
     diff_action_t action;
-    manifest_entry_t* entry; // ptr to entry in one of the manifests
+    manifest_entry_t entry; // ptr to entry in one of the manifests
 } diff_item_t;
 
 typedef struct {
@@ -22,7 +22,7 @@ typedef struct {
 
 void DiffInit(diff_t* d);
 void DiffFree(diff_t* d);
-int DiffAdd(diff_t* d, diff_action_t action, manifest_entry_t* entry);
+int DiffAdd(diff_t* d, diff_action_t action, const manifest_entry_t* entry);
 
 /*
     Compute diff between local and remote manifests

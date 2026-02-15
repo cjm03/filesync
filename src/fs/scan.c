@@ -42,7 +42,7 @@ static int scan_recursive(const char* root, const char* rel, manifest_t* m) {
         }
 
         manifest_entry_t e = {0};
-        e.path = strdup(child_path);
+        e.path = strdup(child_rel);
         e.size = (size_t)st.st_size;
         e.mtime = st.st_mtime;
 

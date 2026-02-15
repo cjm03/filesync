@@ -15,10 +15,11 @@ void DiffInit(diff_t* d) {
 }
 
 void DiffFree(diff_t* d) {
+    for (size_t i = 0; i < d->count; i++) free(d->items[i].entry.path);
     free(d->items);
 }
 
-int DiffAdd(diff_t* d, diff_action_t action, manifest_entry_t* entry) {
+int DiffAdd(diff_t* d, diff_action_t action, const manifest_entry_t* entry) {
     if (d->count == d->capacity) {
         size_t newcap = d->capacity == 0 ? 64 : d->capacity * 2;
         diff_item_t* newitems = realloc(d->items, newcap * sizeof(*newitems));
@@ -27,7 +28,9 @@ int DiffAdd(diff_t* d, diff_action_t action, manifest_entry_t* entry) {
         d->capacity = newcap;
     }
     d->items[d->count].action = action;
-    d->items[d->count].entry = entry;
+    d->items[d->count].entry = *entry;
+    d->items[d->count].entry.path = strdup(entry->path);
+    if (!d->items[d->count].entry.path) return -1;
     d->count++;
     return 0;
 }
@@ -110,6 +113,8 @@ int DiffCompute(const manifest_t* local, const manifest_t* remote, diff_t* out_d
             }
         }
     }
+    ManifestFree(&copylocal);
+    ManifestFree(&copyremote);
     return 0;
 
 }
@@ -128,7 +133,7 @@ int DiffWrite(const diff_t* d, const char* out_path) {
     if (!f) return -1;
     for (size_t i = 0; i < d->count; i++) {
         const diff_item_t* item = &d->items[i];
-        fprintf(f, "%s\t%s\n", action_to_string(item->action), item->entry->path);
+        fprintf(f, "%s\t%s\n", action_to_string(item->action), item->entry.path);
     }
     fclose(f);
     return 0;

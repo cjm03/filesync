@@ -70,9 +70,6 @@ int ManifestWrite(const manifest_t* m, const char* out_path) {
         else snprintf(hash_hex, sizeof(hash_hex), "-");
 
         fprintf(f, "%s\t%zu\t%lld\t%s\t%s\n", type, e->size, (long long)e->mtime, hash_hex, e->path);
-        printf("%s\t%zu\t%lld\t%s\t%s\n", type_to_string(e->type), e->size, (long long)e->mtime, e->hash, e->path);
-        // fprintf(f, "%s,%d\t%zu\t%lld\t%s\t%s\n", type_to_string(e->type), e->has_hash, e->size, (long long)e->mtime, e->path, e->hash);
-        // printf("%s,%d\t%zu\t%lld\t%s\t%s\n", type_to_string(e->type), e->has_hash, e->size, (long long)e->mtime, e->path, e->hash);
     }
     fclose(f);
     return 0;
