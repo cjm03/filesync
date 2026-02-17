@@ -10,7 +10,12 @@ typedef enum {
     MSG_HELLO       = 1,
     MSG_MANIFEST    = 2,
     MSG_DIFF        = 3,
-    MSG_ERR         = 4
+    MSG_ERR         = 4,
+    MSG_FILE_BEGIN  = 5,
+    MSG_FILE_DATA   = 6,
+    MSG_FILE_END    = 7,
+    MSG_OK          = 8,
+    MSG_DONE        = 9
 } msg_type_t;
 
 typedef struct {

@@ -4,6 +4,7 @@
 #include "../fs/manifest.h"
 #include "../sync/diff.h"
 #include "../common/log.h"
+#include "../common/sha256.h"
 // #include <asm-generic/socket.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -13,6 +14,7 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 
 static int create_listen_socket(int port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -36,7 +38,122 @@ static int create_listen_socket(int port) {
     return fd;
 }
 
+static uint64_t ntohll(uint64_t v) {
+    uint32_t lo = ntohl((uint32_t)(v >> 32));
+    uint32_t hi = ntohl((uint32_t)(v & 0xFFFFFFFFU));
+    return ((uint64_t)hi << 32) | lo;
+}
 
+static int ensure_parent_dirs(const char* path) {
+    char tmp[PATHBUF];
+    snprintf(tmp, sizeof(tmp), "%s", path);
+
+    for (char *p = tmp + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            mkdir(tmp, 0755);
+            *p = '/';
+        }
+    }
+    return 0;
+}
+
+static int recv_file(int fd, const char* root, const unsigned char* begin_payload, uint32_t len) {
+    if (len < sizeof(uint16_t) + sizeof(uint64_t) + SHA256_DIGEST_SIZE) return -1;
+
+    const unsigned char* p = begin_payload;
+    uint16_t path_len = 0;
+    memcpy(&path_len, p, sizeof(uint16_t));
+    path_len = ntohs(path_len);
+    p += sizeof(uint16_t);
+
+    if ((size_t)path_len + sizeof(uint64_t) + SHA256_DIGEST_SIZE > len) return -1;
+
+    char relpath[PATHBUF];
+    if (path_len >= sizeof(relpath)) return -1;
+    memcpy(relpath, p, path_len);
+    relpath[path_len] = '\0';
+    p += path_len;
+
+    uint64_t size_net = 0;
+    memcpy(&size_net, p, sizeof(uint64_t));
+    uint64_t file_size = ntohll(size_net);
+    p += sizeof(uint64_t);
+
+    unsigned char expected_hash[SHA256_DIGEST_SIZE];
+    memcpy(expected_hash, p, SHA256_DIGEST_SIZE);
+
+    size_t root_len = strlen(root);
+    size_t rel_len = strlen(relpath);
+    if (root_len + 1 + rel_len + 1 > sizeof((char[PATHBUF]){0})) return -1;
+
+    char fullpath[PATHBUF];
+    int n = snprintf(fullpath, sizeof(fullpath), "%s/%s", root, relpath);
+    if (n < 0 || (size_t)n >= sizeof(fullpath)) return -1;
+
+    const char* tmp_suffix = "/.tmp.";
+    size_t tmp_len = strlen(tmp_suffix) + 20;
+    if ((size_t)n + tmp_len + 1 > sizeof((char[PATHBUF]){0})) return -1;
+
+    char tmppath[PATHBUF];
+    int m = snprintf(tmppath, sizeof(tmppath), "%s/.tmp.%d", fullpath, getpid());
+    if (m < 0 || (size_t)m >= sizeof(tmppath)) return -1;
+
+    ensure_parent_dirs(fullpath);
+
+    FILE* f = fopen(tmppath, "wb");
+    if (!f) return -1;
+
+    sha256_t ctx;
+    sha256_init(&ctx);
+
+    uint64_t total = 0;
+
+    while (1) {
+        frame_header_t hdr;
+        void* payload = NULL;
+        if (FrameRecv(fd, &hdr, &payload) != 0) {
+            fclose(f);
+            free(payload);
+            return -1;
+        }
+
+        if (hdr.type == MSG_FILE_DATA) {
+            if (payload && hdr.payload_len > 0) {
+                fwrite(payload, 1, hdr.payload_len, f);
+                sha256_update(&ctx, payload, hdr.payload_len);
+                total += hdr.payload_len;
+            }
+            free(payload);
+        } else if (hdr.type == MSG_FILE_END) {
+            free(payload);
+            break;
+        } else {
+            free(payload);
+            fclose(f);
+            return -1;
+        }
+    }
+
+    fflush(f);
+    fsync(fileno(f));
+    fclose(f);
+
+    unsigned char actual_hash[SHA256_DIGEST_SIZE];
+    sha256_final(&ctx, actual_hash);
+
+    if (total != file_size || memcmp(actual_hash, expected_hash, SHA256_DIGEST_SIZE) != 0) {
+        unlink(tmppath);
+        return -1;
+    }
+
+    if (rename(tmppath, fullpath) != 0) {
+        unlink(tmppath);
+        return -1;
+    }
+
+    return 0;
+}
 
 
 
@@ -136,8 +253,35 @@ int RunServer(const char* root, int port) {
         free(diff_text);
     } else {
         FrameSend(client_fd, MSG_ERR, "Diff serialize failed", 22);
+        DiffFree(&d);
+        ManifestFree(&local);
+        ManifestFree(&remote);
+        close(client_fd);
+        close(listen_fd);
+        return -1;
     }
 
+    // Receive files until DONE
+    while (1) {
+        void* payload2 = NULL;
+        if (FrameRecv(client_fd, &hdr, &payload2) != 0) break;
+
+        if (hdr.type == MSG_FILE_BEGIN) {
+            if (recv_file(client_fd, root, (const unsigned char*)payload2, hdr.payload_len) != 0) {
+                FrameSend(client_fd, MSG_ERR, "File receive failed", 20);
+                free(payload2);
+                break;
+            }
+            FrameSend(client_fd, MSG_OK, NULL, 0);
+            free(payload2);
+        } else if (hdr.type == MSG_DONE) {
+            free(payload2);
+            break;
+        } else {
+            free(payload2);
+            break;
+        }
+    }
 
     DiffFree(&d);
     ManifestFree(&local);

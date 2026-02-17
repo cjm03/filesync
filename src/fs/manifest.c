@@ -47,14 +47,14 @@ int ManifestAdd(manifest_t* m, const manifest_entry_t* e) {
     return 0;
 }
 
-static const char* type_to_string(entry_type_t t) {
-    switch (t) {
-        case ENTRY_FILE: return "FILE";
-        case ENTRY_DIR: return "DIR";
-        case ENTRY_SYMLINK: return "SYMLINK";
-        default: return "OTHER";
-    }
-}
+// static const char* type_to_string(entry_type_t t) {
+//     switch (t) {
+//         case ENTRY_FILE: return "FILE";
+//         case ENTRY_DIR: return "DIR";
+//         case ENTRY_SYMLINK: return "SYMLINK";
+//         default: return "OTHER";
+//     }
+// }
 
 int ManifestWrite(const manifest_t* m, const char* out_path) {
     FILE* f = fopen(out_path, "w");
