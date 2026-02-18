@@ -10,10 +10,10 @@
 
 static void usage(void) {
     printf("Usage:\n");
-    printf("   sync --scan <path> --out <file>\n");
-    printf("   sync --diff <local manifest> <remote manifest> --out <diff file>\n");
-    printf("   sync --serve --root <path> --port 8443\n");
-    printf("   sync --sync --root <path> --host <ip> --port 8443\n");
+    printf("   filesync --scan <path> --out <file>\n");
+    printf("   filesync --diff <local manifest> <remote manifest> --out <diff file>\n");
+    printf("   filesync --serve --root <path> --port 8443\n");
+    printf("   filesync --sync --root <path> --host <ip> --port 8443\n");
 }
 
 

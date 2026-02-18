@@ -12,9 +12,16 @@ typedef struct sha256_t {
     unsigned char buffer[64];
 } sha256_t;
 
+// Initialize the state
 void sha256_init(sha256_t* p);
+
 void sha256_update(sha256_t* p, const unsigned char* data, size_t size);
+
 void sha256_final(sha256_t* p, unsigned char* digest);
+
+/*
+    Perform SHA256 hashing on supplied data, and write the resulting hash into the supplied buffer
+*/
 void sha256_hash(unsigned char* buf, const unsigned char* data, size_t size);
 
 #endif

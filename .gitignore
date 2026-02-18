@@ -62,4 +62,4 @@ build/
 
 # binaries
 test_*
-sync
+filesync
