@@ -176,7 +176,7 @@ int RunClient(const char *root, const char *host, int port) {
     }
 
     free(manifest_text);
-    ManifestFree(&local);
+    // ManifestFree(&local);
 
     // Receive DIFF or ERR
     frame_header_t hdr;

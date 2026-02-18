@@ -165,128 +165,132 @@ int RunServer(const char* root, int port) {
     }
 
     LogInfo("Server listening on port %d", port);
-    int client_fd = accept(listen_fd, NULL, NULL);
-    if (client_fd < 0) {
-        close(listen_fd);
-        return -1;
-    }
 
-    frame_header_t hdr;
-    void *payload = NULL;
-
-    // Expect HELLO
-    if (FrameRecv(client_fd, &hdr, &payload) != 0 || hdr.type != MSG_HELLO) {
-        FrameSend(client_fd, MSG_ERR, "Expected HELLO", 14);
-        close(client_fd);
-        close(listen_fd);
-        free(payload);
-        return -1;
-    }
-    free(payload);
-
-    // Expect MANIFEST
-    if (FrameRecv(client_fd, &hdr, &payload) != 0 || hdr.type != MSG_MANIFEST) {
-        FrameSend(client_fd, MSG_ERR, "Expected MANIFEST", 17);
-        close(client_fd);
-        close(listen_fd);
-        free(payload);
-        return -1;
-    }
-
-    manifest_t remote;
-    ManifestInit(&remote);
-    if (payload && ManifestReadFromText((const char *)payload, &remote) != 0) {
-        FrameSend(client_fd, MSG_ERR, "Manifest parse error", 21);
-        free(payload);
-        ManifestFree(&remote);
-        close(client_fd);
-        close(listen_fd);
-        return -1;
-    }
-    free(payload);
-
-    // Scan local root
-    manifest_t local;
-    ManifestInit(&local);
-    if (ScanDirectory(root, &local) != 0) {
-        FrameSend(client_fd, MSG_ERR, "Scan failed", 11);
-        ManifestFree(&local);
-        ManifestFree(&remote);
-        close(client_fd);
-        close(listen_fd);
-        return -1;
-    }
-
-    // Diff
-    diff_t d;
-    DiffInit(&d);
-    if (DiffCompute(&local, &remote, &d) != 0) {
-        FrameSend(client_fd, MSG_ERR, "Diff failed", 11);
-        DiffFree(&d);
-        ManifestFree(&local);
-        ManifestFree(&remote);
-        close(client_fd);
-        close(listen_fd);
-        return -1;
-    }
-
-    char* diff_text = NULL;
-    size_t diff_len = 0;
-    if (DiffWrite(&d, "/tmp/sync_diff.txt") == 0) {
-        FILE* f = fopen("/tmp/sync_diff.txt", "r");
-        if (f) {
-            fseek(f, 0, SEEK_END);
-            long sz = ftell(f);
-            fseek(f, 0, SEEK_SET);
-            diff_text = malloc(sz + 1);
-            if (diff_text) {
-                fread(diff_text, 1, sz, f);
-                diff_text[sz] = '\0';
-                diff_len = (size_t)sz;
-            }
-            fclose(f);
+    for (;;) {
+        int client_fd = accept(listen_fd, NULL, NULL);
+        if (client_fd < 0) {
+            close(listen_fd);
+            return -1;
         }
-    }
 
-    if (diff_text) {
-        FrameSend(client_fd, MSG_DIFF, diff_text, (uint32_t)diff_len);
-        free(diff_text);
-    } else {
-        FrameSend(client_fd, MSG_ERR, "Diff serialize failed", 22);
-        DiffFree(&d);
-        ManifestFree(&local);
-        ManifestFree(&remote);
-        close(client_fd);
-        close(listen_fd);
-        return -1;
-    }
+        frame_header_t hdr;
+        void *payload = NULL;
 
-    // Receive files until DONE
-    while (1) {
-        void* payload2 = NULL;
-        if (FrameRecv(client_fd, &hdr, &payload2) != 0) break;
+        // Expect HELLO
+        if (FrameRecv(client_fd, &hdr, &payload) != 0 || hdr.type != MSG_HELLO) {
+            FrameSend(client_fd, MSG_ERR, "Expected HELLO", 14);
+            close(client_fd);
+            // close(listen_fd);
+            free(payload);
+            return -1;
+        }
+        free(payload);
 
-        if (hdr.type == MSG_FILE_BEGIN) {
-            if (recv_file(client_fd, root, (const unsigned char*)payload2, hdr.payload_len) != 0) {
-                FrameSend(client_fd, MSG_ERR, "File receive failed", 20);
+        // Expect MANIFEST
+        if (FrameRecv(client_fd, &hdr, &payload) != 0 || hdr.type != MSG_MANIFEST) {
+            FrameSend(client_fd, MSG_ERR, "Expected MANIFEST", 17);
+            close(client_fd);
+            // close(listen_fd);
+            free(payload);
+            return -1;
+        }
+
+        manifest_t remote;
+        ManifestInit(&remote);
+        if (payload && ManifestReadFromText((const char *)payload, &remote) != 0) {
+            FrameSend(client_fd, MSG_ERR, "Manifest parse error", 21);
+            free(payload);
+            ManifestFree(&remote);
+            close(client_fd);
+            // close(listen_fd);
+            return -1;
+        }
+        free(payload);
+
+        // Scan local root
+        manifest_t local;
+        ManifestInit(&local);
+        if (ScanDirectory(root, &local) != 0) {
+            FrameSend(client_fd, MSG_ERR, "Scan failed", 11);
+            ManifestFree(&local);
+            ManifestFree(&remote);
+            close(client_fd);
+            // close(listen_fd);
+            return -1;
+        }
+
+        // Diff
+        diff_t d;
+        DiffInit(&d);
+        if (DiffCompute(&local, &remote, &d) != 0) {
+            FrameSend(client_fd, MSG_ERR, "Diff failed", 11);
+            DiffFree(&d);
+            ManifestFree(&local);
+            ManifestFree(&remote);
+            close(client_fd);
+            // close(listen_fd);
+            return -1;
+        }
+
+        char* diff_text = NULL;
+        size_t diff_len = 0;
+        if (DiffWrite(&d, "/tmp/sync_diff.txt") == 0) {
+            FILE* f = fopen("/tmp/sync_diff.txt", "r");
+            if (f) {
+                fseek(f, 0, SEEK_END);
+                long sz = ftell(f);
+                fseek(f, 0, SEEK_SET);
+                diff_text = malloc(sz + 1);
+                if (diff_text) {
+                    fread(diff_text, 1, sz, f);
+                    diff_text[sz] = '\0';
+                    diff_len = (size_t)sz;
+                }
+                fclose(f);
+            }
+        }
+
+        if (diff_text) {
+            FrameSend(client_fd, MSG_DIFF, diff_text, (uint32_t)diff_len);
+            free(diff_text);
+        } else {
+            FrameSend(client_fd, MSG_ERR, "Diff serialize failed", 22);
+            DiffFree(&d);
+            ManifestFree(&local);
+            ManifestFree(&remote);
+            close(client_fd);
+            // close(listen_fd);
+            return -1;
+        }
+
+        // Receive files until DONE
+        while (1) {
+            void* payload2 = NULL;
+            if (FrameRecv(client_fd, &hdr, &payload2) != 0) break;
+
+            if (hdr.type == MSG_FILE_BEGIN) {
+                if (recv_file(client_fd, root, (const unsigned char*)payload2, hdr.payload_len) != 0) {
+                    FrameSend(client_fd, MSG_ERR, "File receive failed", 20);
+                    free(payload2);
+                    break;
+                }
+                FrameSend(client_fd, MSG_OK, NULL, 0);
+                free(payload2);
+            } else if (hdr.type == MSG_DONE) {
+                free(payload2);
+                break;
+            } else {
                 free(payload2);
                 break;
             }
-            FrameSend(client_fd, MSG_OK, NULL, 0);
-            free(payload2);
-        } else if (hdr.type == MSG_DONE) {
-            free(payload2);
-            break;
-        } else {
-            free(payload2);
-            break;
         }
+
+        DiffFree(&d);
+        ManifestFree(&local);
+        ManifestFree(&remote);
+        close(client_fd);
     }
 
-    DiffFree(&d);
-    ManifestFree(&local);
-    ManifestFree(&remote);
-    close(client_fd);
     close(listen_fd);
     return 0;
 }
